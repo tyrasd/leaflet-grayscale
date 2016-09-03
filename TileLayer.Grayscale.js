@@ -13,11 +13,25 @@ L.TileLayer.Grayscale = L.TileLayer.extend({
 			return this.quotaRed + this.quotaGreen + this.quotaBlue + this.quotaDividerTune;
 		}
 	},
+	supportsCssFilter: false,
 
 	initialize: function (url, options) {
 		var canvasEl = document.createElement('canvas');
 		if( !(canvasEl.getContext && canvasEl.getContext('2d')) ) {
 			options.enableCanvas = false;
+		}
+		
+		// test if browser supports css filters
+		var tester = document.createElement('tester');
+		if (tester.style.filter === '') {
+			tester.style.filter = 'grayscale(1)';
+			if (tester.style.filter === 'grayscale(1)')
+				this.supportsCssFilter = 'filter';
+		}
+		if (!this.supportCssFilter && tester.style.webkitFilter === '') {
+			tester.style.webkitFilter = 'grayscale(1)';
+			if (tester.style.webkitFilter === 'grayscale(1)')
+				this.supportsCssFilter = 'webkitFilter';
 		}
 
 		L.TileLayer.prototype.initialize.call(this, url, options);
@@ -39,14 +53,20 @@ L.TileLayer.Grayscale = L.TileLayer.extend({
 		if (ctx) {
 			this.onload  = null; // to prevent an infinite loop
 			ctx.drawImage(this, 0, 0);
-			var imgd = ctx.getImageData(0, 0, this._layer.options.tileSize, this._layer.options.tileSize);
-			var pix = imgd.data;
-			for (var i = 0, n = pix.length; i < n; i += 4) {
-				pix[i] = pix[i + 1] = pix[i + 2] = (this._layer.options.quotaRed * pix[i] + this._layer.options.quotaGreen * pix[i + 1] + this._layer.options.quotaBlue * pix[i + 2]) / this._layer.options.quotaDivider();
+			
+			// if browser supports css filters, we use that to grayscale the images
+			if (this._layer.supportCssFilter) {
+				this.style[this._layer.supportCssFilter] = "grayscale(1)";
+			} else {
+				var imgd = ctx.getImageData(0, 0, this._layer.options.tileSize, this._layer.options.tileSize);
+				var pix = imgd.data;
+				for (var i = 0, n = pix.length; i < n; i += 4) {
+					pix[i] = pix[i + 1] = pix[i + 2] = (this._layer.options.quotaRed * pix[i] + this._layer.options.quotaGreen * pix[i + 1] + this._layer.options.quotaBlue * pix[i + 2]) / this._layer.options.quotaDivider();
+				}
+				ctx.putImageData(imgd, 0, 0);
+				this.removeAttribute("crossorigin");
+				this.src = ctx.canvas.toDataURL();
 			}
-			ctx.putImageData(imgd, 0, 0);
-			this.removeAttribute("crossorigin");
-			this.src = ctx.canvas.toDataURL();
 		}
 
 		L.TileLayer.prototype._tileOnLoad.call(this);
